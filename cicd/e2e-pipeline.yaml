@@ -1,59 +1,38 @@
 pool:
   name: builders
 
+# parameters:
+# - name: workspace_env
+#   type: string
+#   values:
+#     - dev
+#     - sbox
+#     - prod
+#     - dr
+#     - perf    
+# - name: action
+#   type: string
+#   values:
+#     - plan
+#     - apply
+#     - destroy      
+
 variables:
+- name: dockerfileBackendPath
+  value: '../flask-pytorch-backend\Dockerfile_backend'
+- name: dockerfileFrontendPath
+  value: '../flask-pytorch-backend\Dockerfile_frontend'
 
-- template: job-variables.yml
 
-- name: imageRepository
+# - name: tfvars_location
+#   value: "tfvars/${{ parameters.workspace_env }}.tfvars"  
 
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+# - name: aws-key-id
+#   ${{ if eq(parameters['workspace_env'], 'dev') }}:
+#     value: "***"
+#   ${{ if eq(parameters['workspace_env'], 'prod') }}:
+#     value: "***"
 
-    value: $(imageRepositoryStage)
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
-
-    value: $(imageRepositoryRelease)
-
-- name: imageName
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
-
-    value: $(imageNameStage)
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
-
-    value: $(imageNameRelease)
-
-- name: containerName
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
-
-    value: $(containerNameStage)
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
-
-    value: $(containerNameRelease)
-
-- name: build_arg_arguments
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
-
-    value: $(docker_build_arguments_stage)
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
-
-    value: $(docker_build_arguments_release)
-
-- name: deploymentName
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
-
-    value: $(deploymentNameStage)
-
-  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
-
-    value: $(deploymentNameRelease)
 
 stages:
 - stage: Docker Login
@@ -65,7 +44,7 @@ stages:
         displayName: Login to Docker Hub
         inputs:
           command: login
-          containerRegistry: containerRegistry
+          containerRegistry: dockerRegistryServiceConnection
 
 - stage: Docker Build backend
   jobs:
@@ -75,11 +54,11 @@ stages:
       - task: Docker@2
         displayName: Build and push an image to azrue container registry
         inputs:
-          containerRegistry: $(containerRegistry)
+          containerRegistry: $(dockerRegistryServiceConnection)
           repository: $(imageRepository)
-          dockerfile: $(dockerfilePath)
+          dockerfile: $(dockerfileBackendPath)
           command: buildAndPush  
-          arguments: $(build_arg_arguments)
+          # arguments: $(build_arg_arguments)
           tags: |
             $(Build.SourceVersion)
             latest
@@ -92,11 +71,10 @@ stages:
       - task: Docker@2
         displayName: Build and push an image to azrue container registry
         inputs:
-          containerRegistry: $(containerRegistry)
+          containerRegistry: $(dockerRegistryServiceConnection)
           repository: $(imageRepository)
-          dockerfile: $(dockerfilePath)
+          dockerfile: $(dockerfileFrontendPath)
           command: buildAndPush  
-          arguments: $(build_arg_arguments)
           tags: |
             $(Build.SourceVersion)
             latest
