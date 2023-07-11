@@ -1,0 +1,12 @@
+FROM python:3.7.5
+
+COPY backend /app
+
+COPY requirements.txt /app
+
+WORKDIR /app
+
+RUN pip install -r /app/requirements.txt
+
+#TO DO - 
+# CMD ["?" ,"--port=8080" ,"--call", "app:run"]
