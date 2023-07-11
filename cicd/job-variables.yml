@@ -1,0 +1,35 @@
+variables:
+  
+  imageRepositoryStage: 'app_name_stage' # name of stage image repository
+  
+  imageRepositoryRelease: 'app_name_release' # name of release image repository
+  
+  containerRegistry: 'acrserviceconnection' # path to container registry
+  
+  dockerfilePath: 'Dockerfile'
+  
+  configurationPath: '~/.kube/config' 
+  
+  vmImageName: 'image_name' # Agent VM image name
+    
+  ocTokenStage: ''
+  
+  deploymentNameStage: 'app-name-nginx-deployment-stage'
+
+  deploymentNameRelease: 'app-name-nginx-deployment-release'
+  
+  imageNameStage: 'acrcalpoc.azurecr.io/app_name_stage'
+  
+  imageNameRelease: 'acrcalpoc.azurecr.io/app_name_release'
+  
+  containerNameStage: 'app-name-nginx-stage'
+  
+  containerNameRelease: 'app-name-nginx-release'
+
+  docker_build_arguments_stage: '--build-arg ARG_BUILD=stage'
+  
+  docker_build_arguments_release: '--build-arg ARG_BUILD=release'
+
+  openShiftProjectStage: 'azure-apps-stage'
+  
+  openShiftProjectRelease: 'azure-apps-release'

@@ -1,0 +1,164 @@
+pool:
+  name: arobuilders
+
+variables:
+
+- template: job-variables.yml
+
+- name: imageRepository
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(imageRepositoryStage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(imageRepositoryRelease)
+
+- name: imageName
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(imageNameStage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(imageNameRelease)
+
+- name: containerName
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(containerNameStage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(containerNameRelease)
+
+- name: build_arg_arguments
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(docker_build_arguments_stage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(docker_build_arguments_release)
+
+- name: openshift_project
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(openShiftProjectStage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(openShiftProjectRelease)
+
+- name: deploymentName
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_stage') }}:
+
+    value: $(deploymentNameStage)
+
+  ${{ if eq(variables['Build.SourceBranchName'], 'docker_release') }}:
+
+    value: $(deploymentNameRelease)
+
+stages:
+- stage: Docker Login
+  jobs:
+  - job: login  
+    displayName: Login to Docker Hub 
+    steps:
+      - task: Docker@2
+        displayName: Login to Docker Hub
+        inputs:
+          command: login
+          containerRegistry: containerRegistry
+
+- stage: Docker Build backend
+  jobs:
+  - job: build  
+    displayName: build backend image   
+    steps:
+      - task: Docker@2
+        displayName: Build and push an image to azrue container registry
+        inputs:
+          containerRegistry: $(containerRegistry)
+          repository: $(imageRepository)
+          dockerfile: $(dockerfilePath)
+          command: buildAndPush  
+          arguments: $(build_arg_arguments)
+          tags: |
+            $(Build.SourceVersion)
+            latest
+
+- stage: Docker Build frontend
+  jobs:
+  - job: build  
+    displayName: build frontend image   
+    steps:
+      - task: Docker@2
+        displayName: Build and push an image to azrue container registry
+        inputs:
+          containerRegistry: $(containerRegistry)
+          repository: $(imageRepository)
+          dockerfile: $(dockerfilePath)
+          command: buildAndPush  
+          arguments: $(build_arg_arguments)
+          tags: |
+            $(Build.SourceVersion)
+            latest
+            
+
+- stage: OpenShift_Deployment
+  dependsOn: Docker_Build
+  jobs:
+  - job: deploy 
+    displayName: deploy an image   
+    steps:
+      - task: AzureKeyVault@2
+        displayName: Get azure key vault if it is stage env
+        inputs:
+          azureSubscription: 'azure-key-vault'
+          KeyVaultName: 'KeyVaultName'
+          SecretsFilter: secret_key_name
+          RunAsPreJob: false 
+        condition: eq(variables['Build.SourceBranchName'], 'docker_stage')
+      
+      - task: AzureKeyVault@2
+        displayName: Get azure key vault if it is release env
+        inputs:
+          azureSubscription: 'azure-key-vault'
+          KeyVaultName: 'KeyVaultName'
+          SecretsFilter: oc-service-account-release-token
+          RunAsPreJob: false 
+        condition: eq(variables['Build.SourceBranchName'], 'docker_release')
+      
+      - task: oc-cmd@2
+        displayName: Login to OpenShift with service account if branch is stage
+        inputs:
+          connectionType: 'Runtime Configuration'
+          configurationPath: '/home/builduser/.kube/config'
+          cmd: 'oc login https://api.pyv48fzq.westeurope.aroapp.io:6443/ --token ${OPENSHIFT_SERVICE_PASSWORD}'
+        env:
+          OPENSHIFT_SERVICE_PASSWORD: $(secret_key_name)
+        condition: eq(variables['Build.SourceBranchName'], 'docker_stage')
+      
+      - task: oc-cmd@2
+        displayName: Login to OpenShift with service account if branch is release
+        inputs:
+          connectionType: 'Runtime Configuration'
+          configurationPath: '/home/builduser/.kube/config'
+          cmd: 'oc login https://api.pyv48fzq.westeurope.aroapp.io:6443/ --token ${OPENSHIFT_SERVICE_PASSWORD}'
+        env:
+          OPENSHIFT_SERVICE_PASSWORD: $(oc-service-account-release-token)
+        condition: eq(variables['Build.SourceBranchName'], 'docker_release')
+      
+      - task: oc-cmd@2
+        inputs:
+          connectionType: 'Runtime Configuration'
+          configurationPath: '/home/builduser/.kube/config'
+          cmd: 'oc set image deployment/$(deploymentName) $(containerName)=$(imageName):$(Build.SourceVersion) -n $(openshift_project)' 
+      
