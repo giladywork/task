@@ -1,9 +1,33 @@
 pool:
   name: builders
 
+parameters:
+
+- name: workspace_env
+  type: string
+  values:
+    - dev
+    - sbox
+    - prod
+    - dr
+    - perf   
+
+- name: terraform_action
+  type: string
+  values:
+    - plan
+    - apply
+    - destroy 
+
 variables:
 
 - template: job-variables.yml
+
+- name: tf-location
+  value: 'terraform'
+
+- name: tfvars_location
+  value: "tfvars/${{ parameters.workspace_env }}.tfvars" 
 
 - name: imageRepository
 
@@ -56,10 +80,95 @@ variables:
     value: $(deploymentNameRelease)
 
 stages:
-- stage: Docker Login
+- stage: 'Terraform_Plan'
+  displayName: Terraform_Plan_Minikube_Terraform
+  condition: eq('${{ parameters.terraform_action }}', 'plan')
+  jobs:
+  # - ${{ if eq(parameters.terrafrom_cloud_workspace, '$(Build.BuildNumber)') }}: 
+  #   - template: /pipelines/templates/jobs/tf-backend-workspace.yml
+  #     parameters:
+  #       terraform_workspace: $(Build.BuildNumber)
+  #       action: create
+  - job: terraform_plan
+    displayName: 'Terraform_Plan'
+    #You need set in Azure DevOps group libariy called terraform_configuration
+    variables:
+    - group: "terraform_configuration"
+    # - group: "terraform_configuration_${{ parameters.aws_account_env }}"
+    steps:
+    - checkout: self
+      fetchDepth: 1
+    - task: Bash@3
+      displayName: 'Terraform_Plan'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(tf-location)
+        script: |
+          if [ "${{ parameters.terrafrom_cloud_workspace }}" == '$(Build.BuildNumber)' ]; then
+            sed "s/"\$TF_WORKSPACE"/$(Build.BuildNumber)/g" -i backend.tf
+          else
+            sed "s/"\$TF_WORKSPACE"/${{ parameters.terrafrom_cloud_workspace }}/g" -i backend.tf
+          fi
+          sed "s/"\$TFC_TOKEN"/$TFC_TOKEN/g" -i backend.tf 
+          
+          cat backend.tf
+          terraform init -upgrade -input=false
+          terraform validate
+          terraform plan -input=false -var-file=$(tfvars_location)
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_KEY)
+        TFC_TOKEN: $(TFC_TOKEN)
+        TF_LOG: $(TF_LOG)
+        # TF_VAR_current_count: ${{ parameters.current_count }}
+        # TF_VAR_instance_count: ${{ parameters.new_count }}
+        # TF_VAR_instance_type: ${{ parameters.instance_type }}
+        
+- stage: 'Terraform_Apply'
+  displayName: Terraform_Apply_Minikube_Terraform
+  condition: eq('${{ parameters.terraform_action }}', 'plan')
+  jobs:
+  # - ${{ if eq(parameters.terrafrom_cloud_workspace, '$(Build.BuildNumber)') }}: 
+  #   - template: /pipelines/templates/jobs/tf-backend-workspace.yml
+  #     parameters:
+  #       terraform_workspace: $(Build.BuildNumber)
+  #       action: create
+  - job: terraform_apply
+    displayName: 'Terraform_Apply'
+    #You need set in Azure DevOps group libariy called terraform_configuration
+    variables:
+    - group: "terraform_configuration"
+    # - group: "terraform_configuration_${{ parameters.aws_account_env }}"
+    steps:
+    - checkout: self
+      fetchDepth: 1
+    - task: Bash@3
+      displayName: 'Terraform_Apply'
+      inputs:
+        targetType: 'inline'
+        workingDirectory: $(tf-location)
+        script: |
+          pwd
+          ls
+          sed "s/\$TFC_TOKEN/$TFC_TOKEN/g" -i backend.tf
+          sed "s/"\$TF_WORKSPACE"/${{ parameters.terrafrom_cloud_workspace }}/g" -i backend.tf
+          terraform init -upgrade -input=false
+          terraform validate
+          terraform apply -auto-approve -input=false -var-file=$(tfvars_location)
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_KEY)
+        TFC_TOKEN: $(TFC_TOKEN)
+        TF_LOG: $(TF_LOG)
+        # TF_VAR_current_count: ${{ parameters.current_count }}
+        # TF_VAR_instance_count: ${{ parameters.new_count }}
+        # TF_VAR_instance_type: ${{ parameters.instance_type }}
+
+- stage: Docker_Login
   jobs:
   - job: login  
     displayName: Login to Docker Hub 
+    dependsOn: [Terraform_Apply_Minikube_Terraform] 
     steps:
       - task: Docker@2
         displayName: Login to Docker Hub
@@ -67,10 +176,10 @@ stages:
           command: login
           containerRegistry: containerRegistry
 
-- stage: Docker Build backend
+- stage: Docker_Build_Backend
   jobs:
   - job: build  
-    displayName: build backend image   
+    displayName: build backend image  
     steps:
       - task: Docker@2
         displayName: Build and push an image to azrue container registry
@@ -84,7 +193,7 @@ stages:
             $(Build.SourceVersion)
             latest
 
-- stage: Docker Build frontend
+- stage: Docker_Build_Frontend
   jobs:
   - job: build  
     displayName: build frontend image   
