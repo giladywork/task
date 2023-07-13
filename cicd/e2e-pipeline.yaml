@@ -32,8 +32,8 @@ variables:
 - name: tfvars_location
   value: "tfvars/${{ parameters.workspace_env }}.tfvars" 
 
-- name: imageRepository
-
+- name: backendImageRepository
+  value: 
 # - name: aws-key-id
 #   ${{ if eq(parameters['workspace_env'], 'dev') }}:
 #     value: "***"
@@ -147,7 +147,7 @@ stages:
         displayName: Build and push an image to azrue container registry
         inputs:
           containerRegistry: $(dockerRegistryServiceConnection)
-          repository: $(imageRepository)
+          repository: $(backendImageRepository)
           dockerfile: $(dockerfileBackendPath)
           command: buildAndPush  
           # arguments: $(build_arg_arguments)
