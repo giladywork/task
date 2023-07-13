@@ -6,7 +6,11 @@ COPY requirements.txt /app
 
 WORKDIR /app
 
-RUN pip install -r /app/requirements.txt
+RUN pip install -r requirements.txt
 
-#TO DO - 
-# CMD ["?" ,"--port=8080" ,"--call", "app:run"]
+EXPOSE 5000
+
+CMD ["python", "/app/main.py"]
+
+
+
