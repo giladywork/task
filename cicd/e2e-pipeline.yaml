@@ -170,9 +170,43 @@ stages:
             latest
 
 
+
 - stage: Deploy backend-python
-- stage: Deploy frontend-python
-  displayName: Deploy front-python
+  displayName: Deploy backend-python
+  dependsOn: Docker_Build_Backend
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: $(vmImageName)
+    environment: '{{ k8sResource.EnvironmentReference.Name }}.{{ k8sResource.Name }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: KubernetesManifest@0
+            displayName: Create imagePullSecret
+            inputs:
+              action: createSecret
+              secretName: $(imagePullSecret)
+              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
+
+          - task: KubernetesManifest@0
+            displayName: Deploy to Kubernetes cluster
+            inputs:
+              workingDirectory: $(k8s-manifests-location)            
+              action: deploy
+              manifests: |
+                app_backend/namespace.yml
+                app_backend/service.yml
+                app_backend/hpa.yml
+                app_backend/deployment.yml
+              imagePullSecrets: |
+                $(imagePullSecret)
+              containers: |
+                $(containerRegistry)/$(imageRepository):$(tag)
+
+- stage: Deploy frontend
+  displayName: Deploy front
   dependsOn: Docker_Build_Frontend
   jobs:
   - deployment: Deploy
@@ -200,6 +234,41 @@ stages:
                 app_frontend/service.yml
                 app_frontend/ingress.yml
                 app_frontend/hpa.yml
+                app_frontend/deployment.yml
+              imagePullSecrets: |
+                $(imagePullSecret)
+              containers: |
+                $(containerRegistry)/$(imageRepository):$(tag)
+
+- stage: Deploy postgresql
+  displayName: Deploy postgresql
+  dependsOn: Deploy_Build_Frontend
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: $(vmImageName)
+    environment: '{{ k8sResource.EnvironmentReference.Name }}.{{ k8sResource.Name }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: KubernetesManifest@0
+            displayName: Create imagePullSecret
+            inputs:
+              action: createSecret
+              secretName: $(imagePullSecret)
+              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
+
+          - task: KubernetesManifest@0
+            displayName: Deploy to Kubernetes cluster
+            inputs:
+              workingDirectory: $(k8s-manifests-location)            
+              action: deploy
+              manifests: |
+                app_frontend/service.yml
+                app_frontend/pv.yml
+                app_frontend/pvc.yml
+                app_frontend/configMap.yml
                 app_frontend/deployment.yml
               imagePullSecrets: |
                 $(imagePullSecret)
