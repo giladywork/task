@@ -24,21 +24,19 @@ variables:
   value: '../flask-pytorch-backend\Dockerfile_backend'
 - name: dockerfileFrontendPath
   value: '../flask-pytorch-backend\Dockerfile_frontend'
-
-
 - name: tf-location
   value: 'terraform'
-
+- name: k8s-manifests-location
+  value: 'k8s'
 - name: tfvars_location
   value: "tfvars/${{ parameters.workspace_env }}.tfvars" 
-
 - name: backendImageRepository
-  value: 
-# - name: aws-key-id
-#   ${{ if eq(parameters['workspace_env'], 'dev') }}:
-#     value: "***"
-#   ${{ if eq(parameters['workspace_env'], 'prod') }}:
-#     value: "***"
+  value: backendImageRepository
+- name: frontendImageRepository
+  value: frontendImageRepository
+
+- name: imagePullSecret
+  value: '{{#toAlphaNumericString containerRegistryConnection.Name 50}}{{/toAlphaNumericString}}{{#shortGuid}}{{/shortGuid}}-auth'
 
 
 stages:
@@ -170,4 +168,40 @@ stages:
           tags: |
             $(Build.SourceVersion)
             latest
-            
+
+
+- stage: Deploy backend-python
+- stage: Deploy frontend-python
+  displayName: Deploy front-python
+  dependsOn: Docker_Build_Frontend
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: $(vmImageName)
+    environment: '{{ k8sResource.EnvironmentReference.Name }}.{{ k8sResource.Name }}'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: KubernetesManifest@0
+            displayName: Create imagePullSecret
+            inputs:
+              action: createSecret
+              secretName: $(imagePullSecret)
+              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
+
+          - task: KubernetesManifest@0
+            displayName: Deploy to Kubernetes cluster
+            inputs:
+              workingDirectory: $(k8s-manifests-location)            
+              action: deploy
+              manifests: |
+                app_frontend/namespace.yml
+                app_frontend/service.yml
+                app_frontend/ingress.yml
+                app_frontend/hpa.yml
+                app_frontend/deployment.yml
+              imagePullSecrets: |
+                $(imagePullSecret)
+              containers: |
+                $(containerRegistry)/$(imageRepository):$(tag)

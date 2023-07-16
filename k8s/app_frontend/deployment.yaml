@@ -18,4 +18,4 @@ spec:
         - image: frontend-app:latest
           name: frontend-app
           ports:
-          - containerPort: 4002
+          - containerPort: 80
