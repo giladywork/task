@@ -3,10 +3,10 @@ kind: Service
 metadata:
   name: backend-python
 spec:
+  type: ClusterIP
   selector:
     app: backend-python
   ports:
   - protocol: "TCP"
     port: 6000
     targetPort: 5000
-  type: ClusterIP
