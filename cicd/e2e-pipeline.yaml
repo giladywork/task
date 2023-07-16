@@ -265,11 +265,11 @@ stages:
               workingDirectory: $(k8s-manifests-location)            
               action: deploy
               manifests: |
-                app_frontend/service.yml
-                app_frontend/pv.yml
-                app_frontend/pvc.yml
-                app_frontend/configMap.yml
-                app_frontend/deployment.yml
+                postgresql/service.yml
+                postgresql/pv.yml
+                postgresql/pvc.yml
+                postgresql/configMap
+                postgresql/deployment.yml
               imagePullSecrets: |
                 $(imagePullSecret)
               containers: |
